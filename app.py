@@ -18,21 +18,9 @@ st.markdown("""
 <style>
     /* Import Clean Font */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-    :root {
-        --accent: #4f46e5;
-        --accent-soft: #eef2ff;
-        --accent-strong: #4338ca;
-        --surface: #ffffff;
-        --surface-muted: #f9fafb;
-        --border-subtle: #e5e7eb;
-        --text-main: #111827;
-        --text-soft: #6b7280;
-    }
     
     * {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        box-sizing: border-box;
     }
     
     /* Main Container */
@@ -55,20 +43,20 @@ st.markdown("""
     /* Header */
     .app-header {
         text-align: center;
-        margin-bottom: 2.5rem;
+        margin-bottom: 2rem;
     }
     
     .app-header h1 {
         font-size: 2rem;
         font-weight: 700;
-        color: var(--text-main);
-        margin-bottom: 0.2rem;
+        color: #1a202c;
+        margin-bottom: 0.25rem;
         letter-spacing: -0.02em;
     }
     
     .app-header p {
-        font-size: 0.95rem;
-        color: var(--text-soft);
+        font-size: 1rem;
+        color: #718096;
         font-weight: 400;
     }
     
@@ -90,98 +78,97 @@ st.markdown("""
     .step-circle {
         width: 32px;
         height: 32px;
-        border-radius: 999px;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 600;
-        font-size: 0.8rem;
-        border: 1px solid var(--border-subtle);
-        background: var(--surface);
-        color: var(--text-soft);
+        font-size: 0.85rem;
+        transition: all 0.3s ease;
     }
     
     .step-circle.active {
-        border-color: var(--accent);
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: #4f46e5;
+        color: white;
     }
     
     .step-circle.completed {
-        border-color: var(--accent);
-        background: var(--accent);
-        color: #ffffff;
+        background: #10b981;
+        color: white;
     }
     
     .step-circle.inactive {
-        opacity: 0.6;
+        background: #e5e7eb;
+        color: #9ca3af;
     }
     
     .step-line {
         width: 40px;
         height: 2px;
-        background: var(--border-subtle);
-        border-radius: 999px;
+        background: #e5e7eb;
     }
     
     .step-line.completed {
-        background: var(--accent);
+        background: #10b981;
     }
     
     /* Card Component */
     .card {
-        background: var(--surface);
+        background: white;
         border-radius: 16px;
-        padding: 1.5rem 1.5rem 1.25rem 1.5rem;
+        padding: 1.5rem;
         margin: 1rem 0;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
-        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        transition: box-shadow 0.3s ease;
+    }
+    
+    .card:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
     
     .card-title {
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         font-weight: 600;
-        color: var(--text-main);
+        color: #1a202c;
         margin-bottom: 0.5rem;
     }
     
     .card-description {
         font-size: 0.95rem;
-        color: var(--text-soft);
-        line-height: 1.6;
-        margin-bottom: 0.25rem;
+        color: #718096;
+        line-height: 1.5;
+        margin-bottom: 1rem;
     }
     
     /* Button Styling */
     .stButton > button {
         width: 100%;
-        background: var(--accent);
+        background: #4f46e5;
         color: white;
         border: none;
-        border-radius: 999px;
+        border-radius: 12px;
         padding: 0.75rem 1.75rem;
         font-size: 0.95rem;
         font-weight: 500;
-        transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
-        box-shadow: 0 6px 16px rgba(79, 70, 229, 0.20);
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     }
     
     .stButton > button:hover {
-        background: var(--accent-strong);
-        box-shadow: 0 10px 28px rgba(79, 70, 229, 0.28);
+        background: #4338ca;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
         transform: translateY(-1px);
     }
     
     .stButton > button:active {
         transform: translateY(0);
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.18);
     }
     
-    /* Radio Buttons - Minimal Pill Design */
+    /* Radio Buttons - Minimal Design */
     .stRadio > label {
         font-size: 0.95rem;
         font-weight: 500;
-        color: var(--text-main);
+        color: #1a202c;
         margin-bottom: 0.75rem;
     }
     
@@ -190,22 +177,21 @@ st.markdown("""
     }
     
     .stRadio > div > label {
-        background: var(--surface) !important;
-        border: 1px solid var(--border-subtle) !important;
-        border-radius: 999px !important;
-        padding: 0.5rem 1rem !important;
+        background: white !important;
+        border: 2px solid #e5e7eb !important;
+        border-radius: 12px !important;
+        padding: 0.75rem 1rem !important;
         cursor: pointer !important;
-        transition: border 0.15s ease, background 0.15s ease, box-shadow 0.15s ease !important;
-        font-size: 0.9rem !important;
+        transition: all 0.2s ease !important;
+        font-size: 0.95rem !important;
         color: #4b5563 !important;
         display: flex !important;
         align-items: center !important;
-        white-space: nowrap !important;
     }
     
     .stRadio > div > label:hover {
-        border-color: var(--accent) !important;
-        background: var(--surface-muted) !important;
+        border-color: #4f46e5 !important;
+        background: #f9fafb !important;
     }
     
     .stRadio > div > label > div {
@@ -213,122 +199,117 @@ st.markdown("""
     }
     
     .stRadio > div > label[data-checked="true"] {
-        border-color: var(--accent) !important;
-        background: var(--accent-soft) !important;
-        box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.08);
-        color: var(--accent) !important;
+        border-color: #4f46e5 !important;
+        background: #eff6ff !important;
     }
     
-    /* Success Message (Subtle) */
+    /* Success Message */
     .success-message {
-        background: #f5f7ff;
-        border-left: 3px solid var(--accent);
+        background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%);
         border-radius: 12px;
-        padding: 0.9rem 1rem;
+        padding: 1.25rem;
+        text-align: center;
         margin: 1rem 0;
-        text-align: left;
     }
     
     .success-message h3 {
-        color: var(--text-main);
-        font-size: 0.95rem;
+        color: #065f46;
+        font-size: 1.15rem;
         font-weight: 600;
-        margin-bottom: 0.15rem;
+        margin-bottom: 0.4rem;
     }
     
     .success-message p {
-        color: var(--text-soft);
-        font-size: 0.9rem;
+        color: #047857;
+        font-size: 0.95rem;
         margin: 0;
     }
     
     /* Ice Cream Result Card */
     .result-card {
-        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 20px;
-        padding: 1.75rem 1.5rem;
+        padding: 2rem 1.5rem;
         text-align: center;
-        margin: 1.5rem 0 1.25rem 0;
+        margin: 1.5rem 0;
         color: white;
-        box-shadow: 0 18px 40px rgba(79, 70, 229, 0.45);
     }
     
     .result-emoji {
-        font-size: 3rem;
-        margin-bottom: 0.5rem;
+        font-size: 4rem;
+        margin-bottom: 0.75rem;
     }
     
     .result-title {
-        font-size: 1.5rem;
+        font-size: 1.75rem;
         font-weight: 700;
-        margin-bottom: 0.45rem;
-        letter-spacing: -0.01em;
+        margin-bottom: 0.75rem;
     }
     
     .result-description {
-        font-size: 0.95rem;
-        opacity: 0.96;
-        margin-bottom: 0.3rem;
+        font-size: 1rem;
+        opacity: 0.95;
+        margin-bottom: 0.5rem;
     }
     
     .result-detail {
-        font-size: 0.85rem;
-        opacity: 0.9;
+        font-size: 0.9rem;
+        opacity: 0.85;
     }
     
     .result-profile {
-        margin-top: 1.2rem;
-        padding-top: 1.1rem;
-        border-top: 1px solid rgba(255,255,255,0.25);
-        font-size: 0.8rem;
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(255,255,255,0.3);
+        font-size: 0.85rem;
         opacity: 0.9;
     }
     
     /* Stats Display */
     .stats-container {
-        background: var(--surface);
+        background: white;
         border-radius: 12px;
-        padding: 1rem;
+        padding: 1.25rem;
         text-align: center;
-        border: 1px solid var(--border-subtle);
+        border: 2px solid #e5e7eb;
     }
     
     .stats-label {
-        font-size: 0.75rem;
+        font-size: 0.8rem;
         color: #6b7280;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 0.25rem;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.4rem;
     }
     
     .stats-value {
-        font-size: 1.4rem;
-        font-weight: 600;
-        color: var(--accent);
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #4f46e5;
     }
     
     .stats-subtext {
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         color: #9ca3af;
-        margin-top: 0.15rem;
+        margin-top: 0.25rem;
     }
     
     /* Progress Bar */
     .stProgress > div > div > div {
-        background: var(--accent);
+        background: #4f46e5;
     }
     
     /* Info Box */
     .info-box {
-        background: #f5f7ff;
-        border-left: 3px solid var(--accent);
-        border-radius: 10px;
+        background: #eff6ff;
+        border-left: 4px solid #3b82f6;
+        border-radius: 8px;
         padding: 0.75rem 1rem;
         margin: 0.75rem 0;
     }
     
     .info-box p {
-        color: #374151;
+        color: #1e40af;
         font-size: 0.9rem;
         margin: 0;
         line-height: 1.4;
@@ -336,17 +317,16 @@ st.markdown("""
     
     /* Tips Section */
     .tips-container {
-        background: var(--surface-muted);
-        border-radius: 14px;
-        padding: 1rem 1.1rem;
-        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 1.25rem;
     }
     
     .tips-title {
         font-size: 0.9rem;
         font-weight: 600;
         color: #374151;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.5rem;
     }
     
     .tips-list {
@@ -358,57 +338,46 @@ st.markdown("""
     .tips-list li {
         color: #6b7280;
         font-size: 0.85rem;
-        padding: 0.25rem 0;
-        padding-left: 1.1rem;
+        padding: 0.3rem 0;
+        padding-left: 1.25rem;
         position: relative;
     }
     
     .tips-list li:before {
         content: "•";
-        color: var(--accent);
+        color: #4f46e5;
         font-weight: bold;
         position: absolute;
         left: 0;
-        top: 0.15rem;
     }
     
     /* Badge */
     .badge {
         display: inline-block;
-        background: var(--accent-soft);
-        color: var(--accent);
-        padding: 0.35rem 0.8rem;
-        border-radius: 999px;
-        font-size: 0.85rem;
+        background: #ede9fe;
+        color: #5b21b6;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.9rem;
         font-weight: 500;
-        margin-top: 0.25rem;
     }
     
     /* Divider */
     .divider {
         height: 1px;
         background: #e5e7eb;
-        margin: 1.5rem 0 1.25rem 0;
-    }
-
-    /* Camera placeholder styling */
-    .stCamera > div {
-        border-radius: 16px !important;
-        border: 1px dashed #d1d5db !important;
-        padding: 0.75rem !important;
-        background: #f9fafb !important;
-    }
-
-    .stCamera label {
-        font-size: 0.9rem !important;
-        color: #4b5563 !important;
-        margin-bottom: 0.5rem !important;
+        margin: 1.5rem 0;
     }
     
     /* Hide Streamlit Elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display: none;}
+    
+    /* Smooth Transitions */
+    * {
+        transition: all 0.2s ease;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -612,19 +581,19 @@ st.markdown("""
 step_html = """
 <div class='step-indicator'>
     <div class='step'>
-        <div class='step-circle {}'>1</div>
+        <div class='step-circle {}'">1</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'>2</div>
+        <div class='step-circle {}'">2</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'>3</div>
+        <div class='step-circle {}'">3</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'>4</div>
+        <div class='step-circle {}'">4</div>
     </div>
 </div>
 """.format(
@@ -660,7 +629,7 @@ if st.session_state.step == 1:
             <ul class='tips-list'>
                 <li>Face the camera directly</li>
                 <li>Ensure good lighting</li>
-                <li>Stay 50–100 cm away</li>
+                <li>Stay 50-100cm away</li>
                 <li>Hold your expression</li>
             </ul>
         </div>
@@ -686,7 +655,7 @@ if st.session_state.step == 1:
                 
             st.markdown(f"""
             <div class='success-message'>
-                <h3>Scan complete</h3>
+                <h3>✓ Scan Complete!</h3>
                 <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(cat, cat)}</strong> ({confidence:.0%} confidence)</p>
             </div>
             """, unsafe_allow_html=True)
@@ -768,7 +737,7 @@ elif st.session_state.step == 3:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    col1, col2 = st.columns([4, 1])
+    col1, col2 = st.columns([2, 1])
     with col1:
         if st.button("← Back", key="back_3"):
             st.session_state.step = 2
@@ -798,7 +767,7 @@ elif st.session_state.step == 4:
     
     st.markdown("""
     <div class='info-box'>
-        <p>✨ This recommendation is AI-powered but meant to be fun and interactive. Enjoy your treat.</p>
+        <p>✨ This recommendation is AI-powered but meant to be fun and interactive. Enjoy your treat!</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -813,7 +782,7 @@ elif st.session_state.step == 4:
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 st.markdown("""
-<div style='text-align: center; color: #9ca3af; font-size: 0.8rem; padding: 0.5rem 0 0.25rem 0;'>
+<div style='text-align: center; color: #9ca3af; font-size: 0.875rem; padding: 1rem 0;'>
     <p>MoodScoop v3.0</p>
 </div>
 """, unsafe_allow_html=True)
