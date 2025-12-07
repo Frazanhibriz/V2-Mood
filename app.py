@@ -25,7 +25,7 @@ st.markdown("""
     
     /* Main Container */
     .stApp {
-        background: #fafbfc;
+        background:
     }
     
     /* Remove default padding */
@@ -49,14 +49,14 @@ st.markdown("""
     .app-header h1 {
         font-size: 2rem;
         font-weight: 700;
-        color: #1a202c;
+        color:
         margin-bottom: 0.25rem;
         letter-spacing: -0.02em;
     }
     
     .app-header p {
         font-size: 1rem;
-        color: #718096;
+        color:
         font-weight: 400;
     }
     
@@ -88,28 +88,28 @@ st.markdown("""
     }
     
     .step-circle.active {
-        background: #4f46e5;
+        background:
         color: white;
     }
     
     .step-circle.completed {
-        background: #10b981;
+        background:
         color: white;
     }
     
     .step-circle.inactive {
-        background: #e5e7eb;
-        color: #9ca3af;
+        background:
+        color:
     }
     
     .step-line {
         width: 40px;
         height: 2px;
-        background: #e5e7eb;
+        background:
     }
     
     .step-line.completed {
-        background: #10b981;
+        background:
     }
     
     /* Card Component */
@@ -129,13 +129,13 @@ st.markdown("""
     .card-title {
         font-size: 1.15rem;
         font-weight: 600;
-        color: #1a202c;
+        color:
         margin-bottom: 0.5rem;
     }
     
     .card-description {
         font-size: 0.95rem;
-        color: #718096;
+        color:
         line-height: 1.5;
         margin-bottom: 1rem;
     }
@@ -143,7 +143,7 @@ st.markdown("""
     /* Button Styling */
     .stButton > button {
         width: 100%;
-        background: #4f46e5;
+        background:
         color: white;
         border: none;
         border-radius: 12px;
@@ -155,7 +155,7 @@ st.markdown("""
     }
     
     .stButton > button:hover {
-        background: #4338ca;
+        background:
         box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
         transform: translateY(-1px);
     }
@@ -168,7 +168,7 @@ st.markdown("""
     .stRadio > label {
         font-size: 0.95rem;
         font-weight: 500;
-        color: #1a202c;
+        color:
         margin-bottom: 0.75rem;
     }
     
@@ -178,34 +178,34 @@ st.markdown("""
     
     .stRadio > div > label {
         background: white !important;
-        border: 2px solid #e5e7eb !important;
+        border: 2px solid
         border-radius: 12px !important;
         padding: 0.75rem 1rem !important;
         cursor: pointer !important;
         transition: all 0.2s ease !important;
         font-size: 0.95rem !important;
-        color: #4b5563 !important;
+        color:
         display: flex !important;
         align-items: center !important;
     }
     
     .stRadio > div > label:hover {
-        border-color: #4f46e5 !important;
-        background: #f9fafb !important;
+        border-color:
+        background:
     }
     
     .stRadio > div > label > div {
-        color: #4b5563 !important;
+        color:
     }
     
     .stRadio > div > label[data-checked="true"] {
-        border-color: #4f46e5 !important;
-        background: #eff6ff !important;
+        border-color:
+        background:
     }
     
     /* Success Message */
     .success-message {
-        background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%);
+        background: linear-gradient(135deg,
         border-radius: 12px;
         padding: 1.25rem;
         text-align: center;
@@ -213,21 +213,21 @@ st.markdown("""
     }
     
     .success-message h3 {
-        color: #065f46;
+        color:
         font-size: 1.15rem;
         font-weight: 600;
         margin-bottom: 0.4rem;
     }
     
     .success-message p {
-        color: #047857;
+        color:
         font-size: 0.95rem;
         margin: 0;
     }
     
     /* Ice Cream Result Card */
     .result-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg,
         border-radius: 20px;
         padding: 2rem 1.5rem;
         text-align: center;
@@ -271,12 +271,12 @@ st.markdown("""
         border-radius: 12px;
         padding: 1.25rem;
         text-align: center;
-        border: 2px solid #e5e7eb;
+        border: 2px solid
     }
     
     .stats-label {
         font-size: 0.8rem;
-        color: #6b7280;
+        color:
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-bottom: 0.4rem;
@@ -285,31 +285,31 @@ st.markdown("""
     .stats-value {
         font-size: 1.5rem;
         font-weight: 700;
-        color: #4f46e5;
+        color:
     }
     
     .stats-subtext {
         font-size: 0.85rem;
-        color: #9ca3af;
+        color:
         margin-top: 0.25rem;
     }
     
     /* Progress Bar */
     .stProgress > div > div > div {
-        background: #4f46e5;
+        background:
     }
     
     /* Info Box */
     .info-box {
-        background: #eff6ff;
-        border-left: 4px solid #3b82f6;
+        background:
+        border-left: 4px solid
         border-radius: 8px;
         padding: 0.75rem 1rem;
         margin: 0.75rem 0;
     }
     
     .info-box p {
-        color: #1e40af;
+        color:
         font-size: 0.9rem;
         margin: 0;
         line-height: 1.4;
@@ -317,15 +317,15 @@ st.markdown("""
     
     /* Warning Box */
     .warning-box {
-        background: #fff7ed;
-        border-left: 4px solid #f59e0b;
+        background:
+        border-left: 4px solid
         border-radius: 8px;
         padding: 0.75rem 1rem;
         margin: 0.75rem 0;
     }
     
     .warning-box p {
-        color: #92400e;
+        color:
         font-size: 0.9rem;
         margin: 0;
         line-height: 1.4;
@@ -333,7 +333,7 @@ st.markdown("""
     
     /* Tips Section */
     .tips-container {
-        background: #f9fafb;
+        background:
         border-radius: 12px;
         padding: 1.25rem;
     }
@@ -341,7 +341,7 @@ st.markdown("""
     .tips-title {
         font-size: 0.9rem;
         font-weight: 600;
-        color: #374151;
+        color:
         margin-bottom: 0.5rem;
     }
     
@@ -352,7 +352,7 @@ st.markdown("""
     }
     
     .tips-list li {
-        color: #6b7280;
+        color:
         font-size: 0.85rem;
         padding: 0.3rem 0;
         padding-left: 1.25rem;
@@ -361,7 +361,7 @@ st.markdown("""
     
     .tips-list li:before {
         content: "•";
-        color: #4f46e5;
+        color:
         font-weight: bold;
         position: absolute;
         left: 0;
@@ -370,8 +370,8 @@ st.markdown("""
     /* Badge */
     .badge {
         display: inline-block;
-        background: #ede9fe;
-        color: #5b21b6;
+        background:
+        color:
         padding: 0.5rem 1rem;
         border-radius: 9999px;
         font-size: 0.9rem;
@@ -381,12 +381,11 @@ st.markdown("""
     /* Divider */
     .divider {
         height: 1px;
-        background: #e5e7eb;
+        background:
         margin: 1.5rem 0;
     }
     
     /* Hide Streamlit Elements */
-    #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display: none;}
     
@@ -406,13 +405,13 @@ def enhance_face_image(image_rgb):
     - Reduce noise
     """
     pil_img = Image.fromarray(image_rgb)
-
+    
     enhancer = ImageEnhance.Contrast(pil_img)
     pil_img = enhancer.enhance(1.3)
-
+    
     enhancer = ImageEnhance.Sharpness(pil_img)
     pil_img = enhancer.enhance(1.2)
-
+    
     img_array = np.array(pil_img)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     
@@ -431,7 +430,7 @@ def predict_emotion_robust(frame_bgr, processor, model, face_detector, ID2LABEL)
     - Stricter confidence thresholds
     - Smart fallback logic
     """
-
+    
     if face_detector is not None:
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         
@@ -453,7 +452,7 @@ def predict_emotion_robust(frame_bgr, processor, model, face_detector, ID2LABEL)
             y2 = min(frame_bgr.shape[0], y + h + margin)
             
             face_roi = frame_bgr[y1:y2, x1:x2]
-
+            
             if face_roi.shape[0] < 120 or face_roi.shape[1] < 120:
                 face_roi = cv2.resize(face_roi, (150, 150))
             
@@ -472,49 +471,48 @@ def predict_emotion_robust(frame_bgr, processor, model, face_detector, ID2LABEL)
             rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
     else:
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-
+    
     pil_img = enhance_face_image(rgb)
-
+    
     predictions = []
-
+    
     inputs = processor(images=pil_img, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)
     probs = outputs.logits.softmax(dim=1)[0]
     predictions.append(probs)
-
+    
     flipped = pil_img.transpose(Image.FLIP_LEFT_RIGHT)
     inputs_flip = processor(images=flipped, return_tensors="pt")
     with torch.no_grad():
         outputs_flip = model(**inputs_flip)
     probs_flip = outputs_flip.logits.softmax(dim=1)[0]
     predictions.append(probs_flip)
-
+    
     avg_probs = torch.stack(predictions).mean(dim=0)
-
+    
     top_vals, top_idx = torch.topk(avg_probs, k=3)
     p1, p2, p3 = [float(v.item()) for v in top_vals]
     i1, i2, i3 = [int(idx.item()) for idx in top_idx]
     
     raw_label1 = ID2LABEL[i1].lower()
     raw_label2 = ID2LABEL[i2].lower()
-
     
-    MIN_CONF = 0.65       
-    MIN_MARGIN = 0.20     
+    MIN_CONF = 0.65
+    MIN_MARGIN = 0.20
     MIN_TOP3_GAP = 0.10
     
     is_reliable = True
-
+    
     if p1 < MIN_CONF:
         is_reliable = False
-
+    
     elif (p1 - p2) < MIN_MARGIN:
         is_reliable = False
-
+    
     elif (p2 - p3) < MIN_TOP3_GAP and p2 > 0.25:
         is_reliable = False
-
+    
     conflicting_pairs = [
         ("happy", "sad"), ("happy", "angry"),
         ("surprise", "sad"), ("fear", "happy")
@@ -522,7 +520,7 @@ def predict_emotion_robust(frame_bgr, processor, model, face_detector, ID2LABEL)
     pair = tuple(sorted([raw_label1, raw_label2]))
     if pair in conflicting_pairs and (p1 - p2) < 0.25:
         is_reliable = False
-
+    
     if not is_reliable:
         return "neutral", "chill", p1, False
     
@@ -538,9 +536,9 @@ def predict_emotion_robust(frame_bgr, processor, model, face_detector, ID2LABEL)
     
     raw_label = raw_label1
     category = MODEL_TO_CATEGORY.get(raw_label, "chill")
-
+    
     if category in ["mad_irritated", "sad", "worried_anxious"]:
-        if p1 < 0.70:  
+        if p1 < 0.70:
             category = "chill"
             is_reliable = False
     
@@ -702,35 +700,31 @@ if st.session_state.step == 1:
         if img is not None:
             pil_img = Image.open(img)
             img_array = np.array(pil_img)
-
+            
             frame_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-
+            
             raw_label, category, confidence, is_reliable = predict_emotion_robust(
                 frame_bgr, processor, model, face_detector, ID2LABEL
             )
-
+            
             st.session_state.detected_cat = category
             st.session_state.detected_conf = confidence
             st.session_state.is_reliable = is_reliable
             st.session_state.final_cat = category
-
+            
             st.markdown(f"""
             <div class='success-message'>
                 <h3>✓ Mood Detected!</h3>
                 <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(category, category)}</strong> ({confidence:.0%} confidence)</p>
             </div>
             """, unsafe_allow_html=True)
-
+            
             st.markdown("<br>", unsafe_allow_html=True)
             
-            col_btn1, col_btn2 = st.columns([1, 1])
-            with col_btn1:
-                if st.button("🔄 Retake Photo", key="retake", use_container_width=True):
-                    st.rerun()
-            with col_btn2:
-                if st.button("Continue →", key="continue_step1", use_container_width=True):
-                    st.session_state.step = 2
-                    st.rerun()
+            if st.button("Continue →", key="continue_step1", use_container_width=True):
+                st.session_state.step = 2
+                st.rerun()
+
 
 
 
@@ -740,7 +734,7 @@ elif st.session_state.step == 2:
         <div class='card-title'>Step 2: Confirm Your Mood</div>
         <div class='card-description'>
             AI detected: <span class='badge'>{CATEGORY_DISPLAY.get(st.session_state.detected_cat, '')}</span>
-            <span style='color: #6b7280; font-weight: 500; margin-left: 0.5rem;'>({st.session_state.detected_conf:.0%} confidence)</span>
+            <span style='color:
             <br><br>
             Please confirm or adjust to ensure the best recommendation.
         </div>
@@ -781,7 +775,7 @@ elif st.session_state.step == 3:
 
     with col1:
         st.markdown("""
-        <div style='font-size:1rem; font-weight:600; color:#111827; margin-bottom:0.6rem;'>
+        <div style='font-size:1rem; font-weight:600; color:
             Saat ini kamu pengen rasa yang…
         </div>
         """, unsafe_allow_html=True)
@@ -796,7 +790,7 @@ elif st.session_state.step == 3:
 
     with col2:
         st.markdown("""
-        <div style='font-size:1rem; font-weight:600; color:#111827; margin-bottom:0.6rem;'>
+        <div style='font-size:1rem; font-weight:600; color:
             Energi kamu hari ini gimana?
         </div>
         """, unsafe_allow_html=True)
@@ -853,7 +847,7 @@ elif st.session_state.step == 4:
 
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 st.markdown("""
-<div style='text-align: center; color: #9ca3af; font-size: 0.875rem; padding: 1rem 0;'>
+<div style='text-align: center; color:
     <p>MoodScoop v3.0 - Improved AI Edition</p>
 </div>
 """, unsafe_allow_html=True)
