@@ -383,8 +383,8 @@ st.markdown("""
 
 @st.cache_resource
 def load_emotion_model():
-    processor = AutoImageProcessor.from_pretrained("./models")
-    model = AutoModelForImageClassification.from_pretrained("./models")
+    processor = AutoImageProcessor.from_pretrained("dima806/facial_emotions_image_detection")
+    model = AutoModelForImageClassification.from_pretrained("dima806/facial_emotions_image_detection")
     model.eval()
     return processor, model
 
