@@ -712,14 +712,19 @@ elif st.session_state.step == 3:
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
-    
+    # Two columns, evenly spaced
+    col1, col2 = st.columns([2, 1], gap="large")
+
+    # -------- LEFT SIDE (FLAVOR) --------
     with col1:
         st.markdown("""
-        <div style='font-size:0.95rem; font-weight:600; color:#111827; margin-bottom:0.35rem;'>
+        <div style='font-size:1rem; font-weight:600; color:#111827; margin-bottom:0.6rem;'>
             Saat ini kamu pengen rasa yang…
         </div>
         """, unsafe_allow_html=True)
+
+        # Spacer so both columns align vertically
+        st.write("")
 
         flavor = st.radio(
             "flavor",
@@ -728,13 +733,17 @@ elif st.session_state.step == 3:
             key="flavor_radio"
         )
         st.session_state.flavor_pref = flavor.lower()
-    
+
+    # -------- RIGHT SIDE (ENERGY) --------
     with col2:
         st.markdown("""
-        <div style='font-size:0.95rem; font-weight:600; color:#111827; margin-bottom:0.35rem;'>
+        <div style='font-size:1rem; font-weight:600; color:#111827; margin-bottom:0.6rem;'>
             Energi kamu hari ini gimana?
         </div>
         """, unsafe_allow_html=True)
+
+        # Same spacer for alignment
+        st.write("")
 
         energy = st.radio(
             "energy",
@@ -744,9 +753,10 @@ elif st.session_state.step == 3:
             key="energy_radio"
         )
         st.session_state.energy_level = energy.lower()
-    
+
+    # Navigation buttons
     st.markdown("<br>", unsafe_allow_html=True)
-    
+
     col1, col2 = st.columns([2, 1])
     with col1:
         if st.button("← Back", key="back_3"):
