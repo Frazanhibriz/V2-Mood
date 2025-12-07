@@ -8,13 +8,11 @@ import torch
 from PIL import Image
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 
-
 st.set_page_config(
     page_title="MoodScoop - AI Ice Cream Recommender",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
-
 
 st.markdown("""
 <style>
@@ -383,12 +381,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-
 @st.cache_resource
 def load_emotion_model():
-    processor = AutoImageProcessor.from_pretrained("models")
-    model = AutoModelForImageClassification.from_pretrained("models")
+    processor = AutoImageProcessor.from_pretrained("dima806/facial_emotions_image_detection")
+    model = AutoModelForImageClassification.from_pretrained("dima806/facial_emotions_image_detection")
     model.eval()
     return processor, model
 
@@ -403,7 +399,6 @@ with st.spinner("Loading AI model..."):
     processor, model = load_emotion_model()
     ID2LABEL = model.config.id2label
     face_detector = load_face_detector()
-
 
 
 MODEL_TO_CATEGORY = {
@@ -457,20 +452,20 @@ ICE_CREAM_MAP = {
     },
 }
 
-
-
-def predict_emotion_from_image(image):
-    """Predict emotion from PIL Image or numpy array"""
-    if isinstance(image, np.ndarray):
-        if len(image.shape) == 2:  # Grayscale
-            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-        elif image.shape[2] == 4:  # RGBA
-            image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-        pil_img = Image.fromarray(image)
+def predict_emotion_from_frame(frame_bgr):
+    if face_detector is not None:
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        faces = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
+        if len(faces) > 0:
+            x, y, w, h = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
+            face_roi = frame_bgr[y:y + h, x:x + w]
+            rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
+        else:
+            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     else:
-        pil_img = image.convert('RGB')
-    
-    
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+
+    pil_img = Image.fromarray(rgb)
     inputs = processor(images=pil_img, return_tensors="pt")
     
     with torch.no_grad():
@@ -485,6 +480,84 @@ def predict_emotion_from_image(image):
     return raw_label, category, confidence
 
 
+def realtime_scan(duration_sec=8, fps=10, buffer_size=15):
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Cannot access camera. Please check permissions.")
+        return None, None, None
+
+    frame_placeholder = st.empty()
+    progress_placeholder = st.empty()
+    stats_placeholder = st.empty()
+
+    start_time = time.time()
+    interval = 1.0 / fps
+    emo_buffer = deque(maxlen=buffer_size)
+    conf_buffer = deque(maxlen=buffer_size)
+    last_raw = None
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame = cv2.flip(frame, 1)
+        raw_label, category, conf = predict_emotion_from_frame(frame)
+        emo_buffer.append(category)
+        conf_buffer.append(conf)
+        last_raw = raw_label
+
+        if emo_buffer:
+            counts = Counter(emo_buffer)
+            stable_cat = counts.most_common(1)[0][0]
+            stable_conf_vals = [c for c, cat in zip(conf_buffer, emo_buffer) if cat == stable_cat]
+            stable_conf = sum(stable_conf_vals) / len(stable_conf_vals) if stable_conf_vals else conf
+        else:
+            stable_cat = category
+            stable_conf = conf
+
+        display = frame.copy()
+        
+        # Simple, clean face box
+        if face_detector is not None:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
+            for (x, y, w, h) in faces:
+                cv2.rectangle(display, (x, y), (x + w, y + h), (79, 70, 229), 2)
+
+        frame_placeholder.image(display, channels="BGR", use_container_width=True)
+
+        elapsed = time.time() - start_time
+        progress = min(elapsed / duration_sec, 1.0)
+        progress_placeholder.progress(progress, text=f"Scanning... {elapsed:.1f}s / {duration_sec}s")
+
+        stats_placeholder.markdown(
+            f"""
+            <div class='stats-container'>
+                <div class='stats-label'>Detected Mood</div>
+                <div class='stats-value'>{CATEGORY_DISPLAY.get(stable_cat, stable_cat)}</div>
+                <div class='stats-subtext'>Confidence: {stable_conf:.0%}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if elapsed >= duration_sec:
+            break
+
+        time.sleep(interval)
+
+    cap.release()
+
+    if not emo_buffer:
+        return None, None, None
+
+    final_counts = Counter(emo_buffer)
+    final_cat = final_counts.most_common(1)[0][0]
+    final_conf_vals = [c for c, cat in zip(conf_buffer, emo_buffer) if cat == final_cat]
+    final_conf = sum(final_conf_vals) / len(final_conf_vals) if final_conf_vals else 0.0
+
+    return last_raw, final_cat, final_conf
 
 if 'step' not in st.session_state:
     st.session_state.step = 1
@@ -500,7 +573,6 @@ if 'energy_level' not in st.session_state:
     st.session_state.energy_level = None
 
 
-
 st.markdown("""
 <div class='app-header'>
     <h1>🍦 MoodScoop</h1>
@@ -509,23 +581,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-
 step_html = """
 <div class='step-indicator'>
     <div class='step'>
-        <div class='step-circle {}'>1</div>
+        <div class='step-circle {}'">1</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'>2</div>
+        <div class='step-circle {}'">2</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'>3</div>
+        <div class='step-circle {}'">3</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'>4</div>
+        <div class='step-circle {}'">4</div>
     </div>
 </div>
 """.format(
@@ -541,14 +612,13 @@ step_html = """
 st.markdown(step_html, unsafe_allow_html=True)
 
 
-
 if st.session_state.step == 1:
     st.markdown("""
     <div class='card'>
         <div class='card-title'>Step 1: Mood Detection</div>
         <div class='card-description'>
-            Take a photo using your camera to detect your current mood.
-            Make sure your face is clearly visible and well-lit.
+            We'll use your camera to analyze your facial expression and detect your current mood.
+            The scan takes about 8 seconds and uses advanced AI technology.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -562,42 +632,35 @@ if st.session_state.step == 1:
             <ul class='tips-list'>
                 <li>Face the camera directly</li>
                 <li>Ensure good lighting</li>
-                <li>Keep a natural expression</li>
-                <li>Make sure face is clear</li>
+                <li>Stay 50-100cm away</li>
+                <li>Hold your expression</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
     
     with col1:
-        camera_photo = st.camera_input("📸 Take a photo")
-        
-        if camera_photo is not None:
-            image = Image.open(camera_photo)
-            
-            st.image(image, caption="Captured Photo", use_container_width=True)
-            
-            with st.spinner("Analyzing your mood..."):
-                raw, cat, conf = predict_emotion_from_image(image)
+        if st.button("Start Mood Scan", key="scan_btn"):
+            with st.spinner("Initializing camera..."):
+                raw, cat, conf = realtime_scan(duration_sec=8, fps=10, buffer_size=15)
             
             if cat is None:
-                st.error("Could not detect mood. Please try again with a clearer photo.")
+                st.error("Scan failed. Please ensure your face is clearly visible and try again.")
             else:
                 st.session_state.detected_cat = cat
                 st.session_state.detected_conf = conf
                 st.session_state.final_cat = cat
+                st.session_state.step = 2
                 
                 st.markdown(f"""
                 <div class='success-message'>
-                    <h3>✓ Analysis Complete!</h3>
+                    <h3>✓ Scan Complete!</h3>
                     <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(cat, cat)}</strong> ({conf:.0%} confidence)</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                
-                if st.button("Continue to Next Step →", key="auto_next"):
-                    st.session_state.step = 2
-                    st.rerun()
-
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
 
 
 elif st.session_state.step == 2:
@@ -635,7 +698,6 @@ elif st.session_state.step == 2:
         if st.button("Continue →", key="next_2"):
             st.session_state.step = 3
             st.rerun()
-
 
 
 elif st.session_state.step == 3:
@@ -684,7 +746,6 @@ elif st.session_state.step == 3:
             st.rerun()
 
 
-
 elif st.session_state.step == 4:
     ice = ICE_CREAM_MAP.get(st.session_state.final_cat, ICE_CREAM_MAP["chill"])
     mood_text = CATEGORY_DISPLAY.get(st.session_state.final_cat, "")
@@ -717,10 +778,9 @@ elif st.session_state.step == 4:
         st.rerun()
 
 
-
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 st.markdown("""
 <div style='text-align: center; color: #9ca3af; font-size: 0.875rem; padding: 1rem 0;'>
-    <p>Powered by AI • MoodScoop v3.0</p>
+    <p>MoodScoop v3.0</p>
 </div>
 """, unsafe_allow_html=True)
