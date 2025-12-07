@@ -1,5 +1,5 @@
 import time
-from collections import Counter
+from collections import Counter, deque
 
 import cv2
 import numpy as np
@@ -452,29 +452,20 @@ ICE_CREAM_MAP = {
     },
 }
 
-def predict_emotion_from_image(pil_image):
-    """Predict emotion from a PIL Image"""
-    # Convert PIL to numpy array
-    img_array = np.array(pil_image)
-    
-    # Detect face if detector is available
+def predict_emotion_from_frame(frame_bgr):
     if face_detector is not None:
-        # Convert RGB to BGR for OpenCV
-        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         faces = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
-        
         if len(faces) > 0:
-            # Get largest face
             x, y, w, h = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
-            face_roi = img_array[y:y + h, x:x + w]
-            pil_img = Image.fromarray(face_roi)
+            face_roi = frame_bgr[y:y + h, x:x + w]
+            rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
         else:
-            pil_img = pil_image
+            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     else:
-        pil_img = pil_image
-    
-    # Process with model
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+
+    pil_img = Image.fromarray(rgb)
     inputs = processor(images=pil_img, return_tensors="pt")
     
     with torch.no_grad():
@@ -488,6 +479,82 @@ def predict_emotion_from_image(pil_image):
     
     return raw_label, category, confidence
 
+
+def realtime_scan(duration_sec=8, fps=10, buffer_size=15):
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Cannot access camera. Please check permissions.")
+        return None, None, None
+
+    frame_placeholder = st.empty()
+    progress_placeholder = st.empty()
+    stats_placeholder = st.empty()
+
+    start_time = time.time()
+    interval = 1.0 / fps
+    emo_buffer = deque(maxlen=buffer_size)
+    conf_buffer = deque(maxlen=buffer_size)
+    last_raw = None
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame = cv2.flip(frame, 1)
+        raw_label, category, conf = predict_emotion_from_frame(frame)
+        emo_buffer.append(category)
+        conf_buffer.append(conf)
+        last_raw = raw_label
+
+        if emo_buffer:
+            counts = Counter(emo_buffer)
+            stable_cat = counts.most_common(1)[0][0]
+            stable_conf_vals = [c for c, cat in zip(conf_buffer, emo_buffer) if cat == stable_cat]
+            stable_conf = sum(stable_conf_vals) / len(stable_conf_vals) if stable_conf_vals else conf
+        else:
+            stable_cat = category
+            stable_conf = conf
+
+        display = frame.copy()
+        
+        if face_detector is not None:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
+            for (x, y, w, h) in faces:
+                cv2.rectangle(display, (x, y), (x + w, y + h), (79, 70, 229), 2)
+
+        frame_placeholder.image(display, channels="BGR", use_container_width=True)
+
+        elapsed = time.time() - start_time
+        progress = min(elapsed / duration_sec, 1.0)
+        progress_placeholder.progress(progress, text=f"Scanning... {elapsed:.1f}s / {duration_sec}s")
+
+        stats_placeholder.markdown(
+            f"""
+            <div class='stats-container'>
+                <div class='stats-label'>Detected Mood</div>
+                <div class='stats-value'>{CATEGORY_DISPLAY.get(stable_cat, stable_cat)}</div>
+                <div class='stats-subtext'>Confidence: {stable_conf:.0%}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if elapsed >= duration_sec:
+            break
+
+    cap.release()
+
+    if not emo_buffer:
+        return None, None, None
+
+    final_counts = Counter(emo_buffer)
+    final_cat = final_counts.most_common(1)[0][0]
+    final_conf_vals = [c for c, cat in zip(conf_buffer, emo_buffer) if cat == final_cat]
+    final_conf = sum(final_conf_vals) / len(final_conf_vals) if final_conf_vals else 0.0
+
+    return last_raw, final_cat, final_conf
 
 if 'step' not in st.session_state:
     st.session_state.step = 1
@@ -547,8 +614,8 @@ if st.session_state.step == 1:
     <div class='card'>
         <div class='card-title'>Step 1: Mood Detection</div>
         <div class='card-description'>
-            Take a photo using your camera and we'll analyze your facial expression to detect your current mood.
-            Our AI uses advanced emotion detection technology.
+            We'll use your camera to analyze your facial expression and detect your current mood.
+            The scan takes about 8 seconds and uses advanced AI technology.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -563,45 +630,39 @@ if st.session_state.step == 1:
                 <li>Face the camera directly</li>
                 <li>Ensure good lighting</li>
                 <li>Stay 50-100cm away</li>
-                <li>Show your expression clearly</li>
+                <li>Hold your expression</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
     
     with col1:
-        # Camera input
-        camera_photo = st.camera_input("Take a photo", key="camera")
-        
-        if camera_photo is not None:
-            # Process the captured image
-            pil_image = Image.open(camera_photo)
-            
-            # Show the captured image
-            st.image(pil_image, caption="Captured Image", use_container_width=True)
-            
-            # Analyze button
-            if st.button("Analyze Mood", key="analyze_btn"):
-                with st.spinner("Analyzing your mood..."):
-                    raw, cat, conf = predict_emotion_from_image(pil_image)
+        img = st.camera_input("Start Mood Scan", key="scan_cam")
+        if img is not None:
+            pil_img = Image.open(img)
+            inputs = processor(images=pil_img, return_tensors="pt")
+            with torch.no_grad():
+                outputs = model(**inputs)
+            probs = outputs.logits.softmax(dim=1)[0]
+            idx = int(torch.argmax(probs).item())
+            raw_label = ID2LABEL[idx].lower()
+            confidence = float(probs[idx].item())
+            cat = MODEL_TO_CATEGORY.get(raw_label, "chill")
+
+            st.session_state.detected_cat = cat
+            st.session_state.detected_conf = confidence
+            st.session_state.final_cat = cat
+            st.session_state.step = 2
                 
-                if cat is None:
-                    st.error("Analysis failed. Please ensure your face is clearly visible and try again.")
-                else:
-                    st.session_state.detected_cat = cat
-                    st.session_state.detected_conf = conf
-                    st.session_state.final_cat = cat
-                    st.session_state.step = 2
-                    
-                    st.markdown(f"""
-                    <div class='success-message'>
-                        <h3>✓ Analysis Complete!</h3>
-                        <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(cat, cat)}</strong> ({conf:.0%} confidence)</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.balloons()
-                    time.sleep(1)
-                    st.rerun()
+            st.markdown(f"""
+            <div class='success-message'>
+                <h3>✓ Scan Complete!</h3>
+                <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(cat, cat)}</strong> ({confidence:.0%} confidence)</p>
+            </div>
+            """, unsafe_allow_html=True)
+                
+            st.balloons()
+            time.sleep(1)
+            st.rerun()
 
 
 elif st.session_state.step == 2:
