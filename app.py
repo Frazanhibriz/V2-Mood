@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import streamlit as st
 import torch
-from PIL import Image
+from PIL import Image, ImageEnhance
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 
 st.set_page_config(
@@ -315,6 +315,22 @@ st.markdown("""
         line-height: 1.4;
     }
     
+    /* Warning Box */
+    .warning-box {
+        background: #fff7ed;
+        border-left: 4px solid #f59e0b;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin: 0.75rem 0;
+    }
+    
+    .warning-box p {
+        color: #92400e;
+        font-size: 0.9rem;
+        margin: 0;
+        line-height: 1.4;
+    }
+    
     /* Tips Section */
     .tips-container {
         background: #f9fafb;
@@ -381,6 +397,187 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ============================================
+# IMPROVED PREPROCESSING FUNCTIONS
+# ============================================
+
+def enhance_face_image(image_rgb):
+    """
+    Enhanced preprocessing untuk better emotion detection:
+    - Normalize brightness dengan CLAHE
+    - Enhance contrast
+    - Reduce noise
+    """
+    pil_img = Image.fromarray(image_rgb)
+    
+    # 1. Enhance contrast
+    enhancer = ImageEnhance.Contrast(pil_img)
+    pil_img = enhancer.enhance(1.3)
+    
+    # 2. Enhance sharpness
+    enhancer = ImageEnhance.Sharpness(pil_img)
+    pil_img = enhancer.enhance(1.2)
+    
+    # 3. CLAHE untuk normalize lighting per channel
+    img_array = np.array(pil_img)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    
+    for i in range(3):
+        img_array[:,:,i] = clahe.apply(img_array[:,:,i])
+    
+    return Image.fromarray(img_array)
+
+
+def predict_emotion_robust(frame_bgr, processor, model, face_detector, ID2LABEL):
+    """
+    IMPROVED emotion prediction dengan:
+    - Better face detection dengan margin
+    - Enhanced preprocessing
+    - Multi-angle testing (original + flipped)
+    - Stricter confidence thresholds
+    - Smart fallback logic
+    """
+    
+    # 1. Face Detection dengan margin lebih besar
+    if face_detector is not None:
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        
+        faces = face_detector.detectMultiScale(
+            gray, 
+            scaleFactor=1.1,
+            minNeighbors=6,
+            minSize=(80, 80),
+            flags=cv2.CASCADE_SCALE_IMAGE
+        )
+        
+        if len(faces) > 0:
+            # Ambil face terbesar + kasih margin 20%
+            x, y, w, h = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
+            
+            margin = int(0.2 * w)
+            x1 = max(0, x - margin)
+            y1 = max(0, y - margin)
+            x2 = min(frame_bgr.shape[1], x + w + margin)
+            y2 = min(frame_bgr.shape[0], y + h + margin)
+            
+            face_roi = frame_bgr[y1:y2, x1:x2]
+            
+            # Resize kalau terlalu kecil
+            if face_roi.shape[0] < 120 or face_roi.shape[1] < 120:
+                face_roi = cv2.resize(face_roi, (150, 150))
+            
+            rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
+        else:
+            # Fallback: center crop
+            h, w = frame_bgr.shape[:2]
+            center_x, center_y = w // 2, h // 2
+            crop_size = min(w, h) // 2
+            
+            x1 = max(0, center_x - crop_size)
+            y1 = max(0, center_y - crop_size)
+            x2 = min(w, center_x + crop_size)
+            y2 = min(h, center_y + crop_size)
+            
+            face_roi = frame_bgr[y1:y2, x1:x2]
+            rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
+    else:
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    
+    # 2. Enhanced preprocessing
+    pil_img = enhance_face_image(rgb)
+    
+    # 3. Multi-angle predictions untuk stability
+    predictions = []
+    
+    # Original
+    inputs = processor(images=pil_img, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(**inputs)
+    probs = outputs.logits.softmax(dim=1)[0]
+    predictions.append(probs)
+    
+    # Flipped (untuk symmetry check)
+    flipped = pil_img.transpose(Image.FLIP_LEFT_RIGHT)
+    inputs_flip = processor(images=flipped, return_tensors="pt")
+    with torch.no_grad():
+        outputs_flip = model(**inputs_flip)
+    probs_flip = outputs_flip.logits.softmax(dim=1)[0]
+    predictions.append(probs_flip)
+    
+    # Average predictions
+    avg_probs = torch.stack(predictions).mean(dim=0)
+    
+    # Get top 3 untuk better decision
+    top_vals, top_idx = torch.topk(avg_probs, k=3)
+    p1, p2, p3 = [float(v.item()) for v in top_vals]
+    i1, i2, i3 = [int(idx.item()) for idx in top_idx]
+    
+    raw_label1 = ID2LABEL[i1].lower()
+    raw_label2 = ID2LABEL[i2].lower()
+    
+    # ============================================
+    # STRICTER THRESHOLDS (ini yang penting!)
+    # ============================================
+    MIN_CONF = 0.65       # Naikin dari 0.55
+    MIN_MARGIN = 0.20     # Naikin dari 0.15
+    MIN_TOP3_GAP = 0.10
+    
+    is_reliable = True
+    
+    # Check 1: Confidence terlalu rendah
+    if p1 < MIN_CONF:
+        is_reliable = False
+    
+    # Check 2: Margin ke rank-2 terlalu kecil (ambiguous)
+    elif (p1 - p2) < MIN_MARGIN:
+        is_reliable = False
+    
+    # Check 3: Distribution terlalu spread
+    elif (p2 - p3) < MIN_TOP3_GAP and p2 > 0.25:
+        is_reliable = False
+    
+    # Check 4: Conflicting emotions (happy vs sad, dll)
+    conflicting_pairs = [
+        ("happy", "sad"), ("happy", "angry"),
+        ("surprise", "sad"), ("fear", "happy")
+    ]
+    pair = tuple(sorted([raw_label1, raw_label2]))
+    if pair in conflicting_pairs and (p1 - p2) < 0.25:
+        is_reliable = False
+    
+    # Kalau ga reliable, fallback ke neutral
+    if not is_reliable:
+        return "neutral", "chill", p1, False
+    
+    # ============================================
+    # MAP TO CATEGORY
+    # ============================================
+    MODEL_TO_CATEGORY = {
+        "happy": "happy_energetic",
+        "surprise": "happy_energetic",
+        "neutral": "chill",
+        "disgust": "chill",
+        "fear": "worried_anxious",
+        "sad": "sad",
+        "angry": "mad_irritated",
+    }
+    
+    raw_label = raw_label1
+    category = MODEL_TO_CATEGORY.get(raw_label, "chill")
+    
+    # Extra check: negative emotions butuh confidence lebih tinggi
+    if category in ["mad_irritated", "sad", "worried_anxious"]:
+        if p1 < 0.70:  # Threshold lebih tinggi untuk negative emotions
+            category = "chill"
+            is_reliable = False
+    
+    return raw_label, category, p1, is_reliable
+
+
+# ============================================
+# MODEL LOADING
+# ============================================
+
 @st.cache_resource
 def load_emotion_model():
     processor = AutoImageProcessor.from_pretrained("dima806/facial_emotions_image_detection")
@@ -401,19 +598,9 @@ with st.spinner("Loading AI model..."):
     face_detector = load_face_detector()
 
 
-MODEL_TO_CATEGORY = {
-    "happy": "happy_energetic",
-    "surprise": "happy_energetic",
-
-    # emosi yang sering noise → turunin ke chill / neutral-ish
-    "neutral": "chill",
-    "disgust": "chill",
-    "fear": "worried_anxious",   # boleh, tapi nanti kita cek confidence
-
-    "sad": "sad",
-    "angry": "mad_irritated",
-}
-
+# ============================================
+# EMOTION CATEGORIES & ICE CREAM MAP
+# ============================================
 
 CATEGORY_DISPLAY = {
     "happy_energetic": "Happy & Energetic",
@@ -456,190 +643,10 @@ ICE_CREAM_MAP = {
     },
 }
 
-def predict_emotion_from_frame(frame_bgr):
-    if face_detector is not None:
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        faces = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
-        if len(faces) > 0:
-            x, y, w, h = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
-            face_roi = frame_bgr[y:y + h, x:x + w]
-            rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
-        else:
-            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    else:
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
-    pil_img = Image.fromarray(rgb)
-    inputs = processor(images=pil_img, return_tensors="pt")
-    
-    with torch.no_grad():
-        outputs = model(**inputs)
-    
-    probs = outputs.logits.softmax(dim=1)[0]
-
-    # ambil top-2
-    top_vals, top_idx = torch.topk(probs, k=2)
-    p1 = float(top_vals[0].item())
-    p2 = float(top_vals[1].item())
-    i1 = int(top_idx[0].item())
-    i2 = int(top_idx[1].item())
-    
-    raw_label = ID2LABEL[i1].lower()
-    
-    # threshold & margin
-    MIN_CONF = 0.55      # kalau kurang dari ini, anggap ga yakin
-    MIN_MARGIN = 0.15    # bedanya dengan kelas ke-2
-    
-    if p1 < MIN_CONF or (p1 - p2) < MIN_MARGIN:
-        # fallback: jangan maksa model sok tau
-        raw_label = "neutral"
-        confidence = p1
-    else:
-        confidence = p1
-    
-    category = MODEL_TO_CATEGORY.get(raw_label, "chill")
-
-    if category in ["mad_irritated", "sad", "worried_anxious"] and confidence < 0.60:
-        category = "chill"
-    
-    return raw_label, category, confidence
-
-
-
-def realtime_scan(duration_sec=12, fps=15, buffer_size=25):
-    """
-    Versi stabil:
-    - Weighted smoothing
-    - Majority vote dari 3 snapshot waktu: early, mid, last
-    - Stabil banget untuk mood detection
-    """
-
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        st.error("Cannot access camera. Please check permissions.")
-        return None, None, None
-
-    frame_placeholder = st.empty()
-    progress_placeholder = st.empty()
-    stats_placeholder = st.empty()
-
-    start_time = time.time()
-    interval = 1.0 / fps
-
-    emo_buffer = deque(maxlen=buffer_size)
-    conf_buffer = deque(maxlen=buffer_size)
-
-    early_vote = None
-    mid_vote = None
-    late_vote = None
-
-    # titik snapshot (detik)
-    early_t = duration_sec * 0.25
-    mid_t   = duration_sec * 0.50
-    late_t  = duration_sec * 0.85
-
-    last_raw = None
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frame = cv2.flip(frame, 1)
-        raw_label, category, conf = predict_emotion_from_frame(frame)
-
-        emo_buffer.append(category)
-        conf_buffer.append(conf)
-        last_raw = raw_label
-
-        elapsed = time.time() - start_time
-
-        # ============================
-        # Weighted smoothing
-        # ============================
-        if emo_buffer:
-            weights = np.linspace(0.3, 1.0, len(emo_buffer))
-            score_map = {}
-
-            for w, cat in zip(weights, emo_buffer):
-                score_map[cat] = score_map.get(cat, 0) + w
-
-            stable_cat = max(score_map, key=score_map.get)
-
-            # confidence untuk kategori stabil
-            stable_conf_vals = [
-                c for c, cat in zip(conf_buffer, emo_buffer) if cat == stable_cat
-            ]
-            stable_conf = sum(stable_conf_vals) / len(stable_conf_vals) if stable_conf_vals else conf
-        else:
-            stable_cat = category
-            stable_conf = conf
-
-        # ============================
-        # Snapshot voting
-        # ============================
-        if early_vote is None and elapsed >= early_t:
-            early_vote = stable_cat
-        if mid_vote is None and elapsed >= mid_t:
-            mid_vote = stable_cat
-        if late_vote is None and elapsed >= late_t:
-            late_vote = stable_cat
-
-        # ============================
-        # UI rendering
-        # ============================
-        display = frame.copy()
-
-        if face_detector is not None:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = face_detector.detectMultiScale(gray, 1.2, 5, minSize=(60,60))
-            for (x, y, w, h) in faces:
-                cv2.rectangle(display, (x, y), (x+w, y+h), (79, 70, 229), 2)
-
-        frame_placeholder.image(display, channels="BGR", use_container_width=True)
-
-        progress = min(elapsed / duration_sec, 1.0)
-        progress_placeholder.progress(
-            progress,
-            text=f"Scanning... {elapsed:.1f}s / {duration_sec}s"
-        )
-
-        stats_placeholder.markdown(
-            f"""
-            <div class='stats-container'>
-                <div class='stats-label'>Detected Mood</div>
-                <div class='stats-value'>{CATEGORY_DISPLAY.get(stable_cat, stable_cat)}</div>
-                <div class='stats-subtext'>Confidence: {stable_conf:.0%}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        if elapsed >= duration_sec:
-            break
-
-        time.sleep(interval)
-
-    cap.release()
-
-    # ============================
-    # Final: Majority voting dari 3 snapshot
-    # ============================
-    votes = [v for v in [early_vote, mid_vote, late_vote] if v is not None]
-
-    if not votes:
-        return None, None, None
-
-    final_cat = Counter(votes).most_common(1)[0][0]
-
-    # Confidence (dirata-rata yg sesuai kategori final)
-    conf_vals = [
-        c for c, cat in zip(conf_buffer, emo_buffer) if cat == final_cat
-    ]
-    final_conf = sum(conf_vals) / len(conf_vals) if conf_vals else 0.0
-
-    return last_raw, final_cat, final_conf
-
+# ============================================
+# SESSION STATE INITIALIZATION
+# ============================================
 
 if 'step' not in st.session_state:
     st.session_state.step = 1
@@ -647,6 +654,8 @@ if 'detected_cat' not in st.session_state:
     st.session_state.detected_cat = None
 if 'detected_conf' not in st.session_state:
     st.session_state.detected_conf = None
+if 'is_reliable' not in st.session_state:
+    st.session_state.is_reliable = None
 if 'final_cat' not in st.session_state:
     st.session_state.final_cat = None
 if 'flavor_pref' not in st.session_state:
@@ -654,6 +663,10 @@ if 'flavor_pref' not in st.session_state:
 if 'energy_level' not in st.session_state:
     st.session_state.energy_level = None
 
+
+# ============================================
+# HEADER
+# ============================================
 
 st.markdown("""
 <div class='app-header'>
@@ -663,22 +676,26 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ============================================
+# STEP INDICATOR
+# ============================================
+
 step_html = """
 <div class='step-indicator'>
     <div class='step'>
-        <div class='step-circle {}'">1</div>
+        <div class='step-circle {}'>1</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'">2</div>
+        <div class='step-circle {}'>2</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'">3</div>
+        <div class='step-circle {}'>3</div>
     </div>
     <div class='step-line {}'></div>
     <div class='step'>
-        <div class='step-circle {}'">4</div>
+        <div class='step-circle {}'>4</div>
     </div>
 </div>
 """.format(
@@ -694,13 +711,17 @@ step_html = """
 st.markdown(step_html, unsafe_allow_html=True)
 
 
+# ============================================
+# STEP 1: MOOD DETECTION
+# ============================================
+
 if st.session_state.step == 1:
     st.markdown("""
     <div class='card'>
         <div class='card-title'>Step 1: Mood Detection</div>
         <div class='card-description'>
             We'll use your camera to analyze your facial expression and detect your current mood.
-            The scan takes about 8 seconds and uses advanced AI technology.
+            Our improved AI provides more accurate and reliable results.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -716,6 +737,7 @@ if st.session_state.step == 1:
                 <li>Ensure good lighting</li>
                 <li>Stay 50-100cm away</li>
                 <li>Hold your expression</li>
+                <li>Remove glasses if possible</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -724,38 +746,59 @@ if st.session_state.step == 1:
         img = st.camera_input("Start Mood Scan", key="scan_cam")
         if img is not None:
             pil_img = Image.open(img)
-            inputs = processor(images=pil_img, return_tensors="pt")
-            with torch.no_grad():
-                outputs = model(**inputs)
-            probs = outputs.logits.softmax(dim=1)[0]
-            idx = int(torch.argmax(probs).item())
-            raw_label = ID2LABEL[idx].lower()
-            confidence = float(probs[idx].item())
-            cat = MODEL_TO_CATEGORY.get(raw_label, "chill")
-
-            st.session_state.detected_cat = cat
+            img_array = np.array(pil_img)
+            
+            # Convert to BGR for processing
+            frame_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            
+            # IMPROVED PREDICTION dengan better thresholds
+            raw_label, category, confidence, is_reliable = predict_emotion_robust(
+                frame_bgr, processor, model, face_detector, ID2LABEL
+            )
+            
+            # Store in session state
+            st.session_state.detected_cat = category
             st.session_state.detected_conf = confidence
-            st.session_state.final_cat = cat
+            st.session_state.is_reliable = is_reliable
+            st.session_state.final_cat = category
             st.session_state.step = 2
-                
-            st.markdown(f"""
-            <div class='success-message'>
-                <h3>✓ Scan Complete!</h3>
-                <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(cat, cat)}</strong> ({confidence:.0%} confidence)</p>
-            </div>
-            """, unsafe_allow_html=True)
-                
-            st.balloons()
-            time.sleep(1)
+            
+            # Show result based on reliability
+            if is_reliable:
+                st.markdown(f"""
+                <div class='success-message'>
+                    <h3>✓ High Quality Scan!</h3>
+                    <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(category, category)}</strong> ({confidence:.0%} confidence)</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.balloons()
+            else:
+                st.markdown(f"""
+                <div class='warning-box'>
+                    <p>⚠️ <strong>Low confidence detection</strong></p>
+                    <p>Detected: {CATEGORY_DISPLAY.get(category, category)} ({confidence:.0%})</p>
+                    <p>You can confirm or adjust in the next step.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            time.sleep(1.5)
             st.rerun()
 
 
+# ============================================
+# STEP 2: CONFIRM MOOD
+# ============================================
+
 elif st.session_state.step == 2:
+    reliability_badge = "✓ High confidence" if st.session_state.is_reliable else "⚠️ Low confidence"
+    badge_color = "#10b981" if st.session_state.is_reliable else "#f59e0b"
+    
     st.markdown(f"""
     <div class='card'>
         <div class='card-title'>Step 2: Confirm Your Mood</div>
         <div class='card-description'>
-            We detected your mood as <span class='badge'>{CATEGORY_DISPLAY.get(st.session_state.detected_cat, '')}</span>
+            AI detected: <span class='badge'>{CATEGORY_DISPLAY.get(st.session_state.detected_cat, '')}</span>
+            <span style='color: {badge_color}; font-weight: 600; margin-left: 0.5rem;'>{reliability_badge}</span>
             <br><br>
             Please confirm or adjust to ensure the best recommendation.
         </div>
@@ -787,6 +830,10 @@ elif st.session_state.step == 2:
             st.rerun()
 
 
+# ============================================
+# STEP 3: PREFERENCES
+# ============================================
+
 elif st.session_state.step == 3:
     st.markdown("""
     <div class='card'>
@@ -797,20 +844,15 @@ elif st.session_state.step == 3:
     </div>
     """, unsafe_allow_html=True)
     
-    # Two columns, evenly spaced
     col1, col2 = st.columns([2, 1], gap="large")
 
-    # -------- LEFT SIDE (FLAVOR) --------
     with col1:
         st.markdown("""
         <div style='font-size:1rem; font-weight:600; color:#111827; margin-bottom:0.6rem;'>
             Saat ini kamu pengen rasa yang…
         </div>
         """, unsafe_allow_html=True)
-
-        # Spacer so both columns align vertically
         st.write("")
-
         flavor = st.radio(
             "flavor",
             ["Sweet", "Fresh", "Creamy", "Strong"],
@@ -819,17 +861,13 @@ elif st.session_state.step == 3:
         )
         st.session_state.flavor_pref = flavor.lower()
 
-    # -------- RIGHT SIDE (ENERGY) --------
     with col2:
         st.markdown("""
         <div style='font-size:1rem; font-weight:600; color:#111827; margin-bottom:0.6rem;'>
             Energi kamu hari ini gimana?
         </div>
         """, unsafe_allow_html=True)
-
-        # Same spacer for alignment
         st.write("")
-
         energy = st.radio(
             "energy",
             ["Tired", "Normal", "Energetic"],
@@ -839,7 +877,6 @@ elif st.session_state.step == 3:
         )
         st.session_state.energy_level = energy.lower()
 
-    # Navigation buttons
     st.markdown("<br>", unsafe_allow_html=True)
 
     col1, col2 = st.columns([2, 1])
@@ -853,6 +890,9 @@ elif st.session_state.step == 3:
             st.rerun()
 
 
+# ============================================
+# STEP 4: RESULT
+# ============================================
 
 elif st.session_state.step == 4:
     ice = ICE_CREAM_MAP.get(st.session_state.final_cat, ICE_CREAM_MAP["chill"])
@@ -873,12 +913,12 @@ elif st.session_state.step == 4:
     
     st.markdown("""
     <div class='info-box'>
-        <p>✨ This recommendation is AI-powered but meant to be fun and interactive. Enjoy your treat!</p>
+        <p>✨ This recommendation is AI-powered with improved accuracy. Enjoy your treat!</p>
     </div>
     """, unsafe_allow_html=True)
     
     if st.button("Start Over", key="reset"):
-        for key in ['step', 'detected_cat', 'detected_conf', 'final_cat', 'flavor_pref', 'energy_level']:
+        for key in ['step', 'detected_cat', 'detected_conf', 'is_reliable', 'final_cat', 'flavor_pref', 'energy_level']:
             if key == 'step':
                 st.session_state[key] = 1
             else:
@@ -886,9 +926,13 @@ elif st.session_state.step == 4:
         st.rerun()
 
 
+# ============================================
+# FOOTER
+# ============================================
+
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 st.markdown("""
 <div style='text-align: center; color: #9ca3af; font-size: 0.875rem; padding: 1rem 0;'>
-    <p>MoodScoop v3.0</p>
+    <p>MoodScoop v3.0 - Improved AI Edition</p>
 </div>
 """, unsafe_allow_html=True)
