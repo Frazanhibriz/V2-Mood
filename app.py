@@ -403,13 +403,17 @@ with st.spinner("Loading AI model..."):
 
 MODEL_TO_CATEGORY = {
     "happy": "happy_energetic",
+    "surprise": "happy_energetic",
+
+    # emosi yang sering noise → turunin ke chill / neutral-ish
+    "neutral": "chill",
+    "disgust": "chill",
+    "fear": "worried_anxious",   # boleh, tapi nanti kita cek confidence
+
     "sad": "sad",
     "angry": "mad_irritated",
-    "fear": "worried_anxious",
-    "surprise": "happy_energetic",
-    "disgust": "mad_irritated",
-    "neutral": "chill",
 }
+
 
 CATEGORY_DISPLAY = {
     "happy_energetic": "Happy & Energetic",
@@ -472,12 +476,34 @@ def predict_emotion_from_frame(frame_bgr):
         outputs = model(**inputs)
     
     probs = outputs.logits.softmax(dim=1)[0]
-    idx = int(torch.argmax(probs).item())
-    raw_label = ID2LABEL[idx].lower()
-    confidence = float(probs[idx].item())
+
+    # ambil top-2
+    top_vals, top_idx = torch.topk(probs, k=2)
+    p1 = float(top_vals[0].item())
+    p2 = float(top_vals[1].item())
+    i1 = int(top_idx[0].item())
+    i2 = int(top_idx[1].item())
+    
+    raw_label = ID2LABEL[i1].lower()
+    
+    # threshold & margin
+    MIN_CONF = 0.55      # kalau kurang dari ini, anggap ga yakin
+    MIN_MARGIN = 0.15    # bedanya dengan kelas ke-2
+    
+    if p1 < MIN_CONF or (p1 - p2) < MIN_MARGIN:
+        # fallback: jangan maksa model sok tau
+        raw_label = "neutral"
+        confidence = p1
+    else:
+        confidence = p1
+    
     category = MODEL_TO_CATEGORY.get(raw_label, "chill")
+
+    if category in ["mad_irritated", "sad", "worried_anxious"] and confidence < 0.60:
+        category = "chill"
     
     return raw_label, category, confidence
+
 
 
 def realtime_scan(duration_sec=12, fps=15, buffer_size=25):
