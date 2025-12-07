@@ -712,7 +712,7 @@ elif st.session_state.step == 3:
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("**Flavor preference:**")
