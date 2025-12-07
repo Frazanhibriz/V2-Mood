@@ -480,7 +480,14 @@ def predict_emotion_from_frame(frame_bgr):
     return raw_label, category, confidence
 
 
-def realtime_scan(duration_sec=8, fps=10, buffer_size=15):
+def realtime_scan(duration_sec=12, fps=15, buffer_size=25):
+    """
+    Versi stabil:
+    - Weighted smoothing
+    - Majority vote dari 3 snapshot waktu: early, mid, last
+    - Stabil banget untuk mood detection
+    """
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         st.error("Cannot access camera. Please check permissions.")
@@ -492,8 +499,19 @@ def realtime_scan(duration_sec=8, fps=10, buffer_size=15):
 
     start_time = time.time()
     interval = 1.0 / fps
+
     emo_buffer = deque(maxlen=buffer_size)
     conf_buffer = deque(maxlen=buffer_size)
+
+    early_vote = None
+    mid_vote = None
+    late_vote = None
+
+    # titik snapshot (detik)
+    early_t = duration_sec * 0.25
+    mid_t   = duration_sec * 0.50
+    late_t  = duration_sec * 0.85
+
     last_raw = None
 
     while True:
@@ -503,32 +521,62 @@ def realtime_scan(duration_sec=8, fps=10, buffer_size=15):
 
         frame = cv2.flip(frame, 1)
         raw_label, category, conf = predict_emotion_from_frame(frame)
+
         emo_buffer.append(category)
         conf_buffer.append(conf)
         last_raw = raw_label
 
+        elapsed = time.time() - start_time
+
+        # ============================
+        # Weighted smoothing
+        # ============================
         if emo_buffer:
-            counts = Counter(emo_buffer)
-            stable_cat = counts.most_common(1)[0][0]
-            stable_conf_vals = [c for c, cat in zip(conf_buffer, emo_buffer) if cat == stable_cat]
+            weights = np.linspace(0.3, 1.0, len(emo_buffer))
+            score_map = {}
+
+            for w, cat in zip(weights, emo_buffer):
+                score_map[cat] = score_map.get(cat, 0) + w
+
+            stable_cat = max(score_map, key=score_map.get)
+
+            # confidence untuk kategori stabil
+            stable_conf_vals = [
+                c for c, cat in zip(conf_buffer, emo_buffer) if cat == stable_cat
+            ]
             stable_conf = sum(stable_conf_vals) / len(stable_conf_vals) if stable_conf_vals else conf
         else:
             stable_cat = category
             stable_conf = conf
 
+        # ============================
+        # Snapshot voting
+        # ============================
+        if early_vote is None and elapsed >= early_t:
+            early_vote = stable_cat
+        if mid_vote is None and elapsed >= mid_t:
+            mid_vote = stable_cat
+        if late_vote is None and elapsed >= late_t:
+            late_vote = stable_cat
+
+        # ============================
+        # UI rendering
+        # ============================
         display = frame.copy()
-        
+
         if face_detector is not None:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
+            faces = face_detector.detectMultiScale(gray, 1.2, 5, minSize=(60,60))
             for (x, y, w, h) in faces:
-                cv2.rectangle(display, (x, y), (x + w, y + h), (79, 70, 229), 2)
+                cv2.rectangle(display, (x, y), (x+w, y+h), (79, 70, 229), 2)
 
         frame_placeholder.image(display, channels="BGR", use_container_width=True)
 
-        elapsed = time.time() - start_time
         progress = min(elapsed / duration_sec, 1.0)
-        progress_placeholder.progress(progress, text=f"Scanning... {elapsed:.1f}s / {duration_sec}s")
+        progress_placeholder.progress(
+            progress,
+            text=f"Scanning... {elapsed:.1f}s / {duration_sec}s"
+        )
 
         stats_placeholder.markdown(
             f"""
@@ -544,17 +592,28 @@ def realtime_scan(duration_sec=8, fps=10, buffer_size=15):
         if elapsed >= duration_sec:
             break
 
+        time.sleep(interval)
+
     cap.release()
 
-    if not emo_buffer:
+    # ============================
+    # Final: Majority voting dari 3 snapshot
+    # ============================
+    votes = [v for v in [early_vote, mid_vote, late_vote] if v is not None]
+
+    if not votes:
         return None, None, None
 
-    final_counts = Counter(emo_buffer)
-    final_cat = final_counts.most_common(1)[0][0]
-    final_conf_vals = [c for c, cat in zip(conf_buffer, emo_buffer) if cat == final_cat]
-    final_conf = sum(final_conf_vals) / len(final_conf_vals) if final_conf_vals else 0.0
+    final_cat = Counter(votes).most_common(1)[0][0]
+
+    # Confidence (dirata-rata yg sesuai kategori final)
+    conf_vals = [
+        c for c, cat in zip(conf_buffer, emo_buffer) if cat == final_cat
+    ]
+    final_conf = sum(conf_vals) / len(conf_vals) if conf_vals else 0.0
 
     return last_raw, final_cat, final_conf
+
 
 if 'step' not in st.session_state:
     st.session_state.step = 1
