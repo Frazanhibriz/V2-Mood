@@ -713,7 +713,7 @@ elif st.session_state.step == 3:
     """, unsafe_allow_html=True)
     
     # Two columns, evenly spaced
-    col1, col2 = st.columns([1, 1], gap="large")
+    col1, col2 = st.columns([2, 1], gap="large")
 
     # -------- LEFT SIDE (FLAVOR) --------
     with col1:
