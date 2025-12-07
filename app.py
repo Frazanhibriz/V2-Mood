@@ -1,6 +1,6 @@
 import time
 from collections import Counter, deque
-
+from skimage.transform import rotate
 import cv2
 import numpy as np
 import streamlit as st
@@ -381,6 +381,57 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def mouth_curvature(face):
+    gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    lower = gray[int(h*0.55):int(h*0.75), int(w*0.2):int(w*0.8)]
+    edges = cv2.Canny(lower, 40, 110)
+    ys, xs = np.where(edges > 0)
+    if len(xs) < 20:
+        return 0.0
+    z = np.polyfit(xs, ys, 2)[0]
+    s = max(0, min(1, -z * 2500))
+    return s
+
+
+def eyebrow_tension(face):
+    gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    upper = gray[int(h*0.12):int(h*0.30), int(w*0.2):int(w*0.8)]
+    edges = cv2.Canny(upper, 40, 120)
+    t = min(1, edges.sum() / 35000)
+    return t
+
+
+def eye_aspect_ratio(face):
+    gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    eyes = gray[int(h*0.25):int(h*0.50), int(w*0.2):int(w*0.8)]
+    closed = np.mean(eyes < 60)
+    return closed
+
+
+def enhance_image(rgb):
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
+    l, a, b = cv2.split(lab)
+    l = cv2.equalizeHist(l)
+    lab = cv2.merge((l, a, b))
+    rgb = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+    return rgb
+
+
+def align_face(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    edges = cv2.Canny(gray, 30, 100)
+    pts = np.column_stack(np.where(edges > 0))
+    if len(pts) < 60:
+        return img
+    ang = cv2.minAreaRect(pts)[-1]
+    if ang < -45:
+        ang += 90
+    return rotate(img, ang, reshape=False)
+
+
 @st.cache_resource
 def load_emotion_model():
     processor = AutoImageProcessor.from_pretrained("dima806/facial_emotions_image_detection")
@@ -459,186 +510,118 @@ ICE_CREAM_MAP = {
 def predict_emotion_from_frame(frame_bgr):
     if face_detector is not None:
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        faces = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(60, 60))
+        faces = face_detector.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
         if len(faces) > 0:
-            x, y, w, h = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
-            face_roi = frame_bgr[y:y + h, x:x + w]
-            rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
+            x, y, w, h = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
+            crop = frame_bgr[y:y+h, x:x+w]
         else:
-            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            crop = frame_bgr
     else:
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        crop = frame_bgr
 
-    pil_img = Image.fromarray(rgb)
-    inputs = processor(images=pil_img, return_tensors="pt")
-    
+    rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+    rgb = enhance_image(rgb)
+    rgb = align_face(rgb)
+
+    smile = mouth_curvature(crop)
+    tension = eyebrow_tension(crop)
+    tired = eye_aspect_ratio(crop)
+
+    pil_img = Image.fromarray(np.uint8(rgb))
+    inp = processor(images=pil_img, return_tensors="pt")
+
     with torch.no_grad():
-        outputs = model(**inputs)
-    
-    probs = outputs.logits.softmax(dim=1)[0]
+        logits = model(**inp).logits.softmax(dim=1)[0].numpy()
 
-    # ambil top-2
-    top_vals, top_idx = torch.topk(probs, k=2)
-    p1 = float(top_vals[0].item())
-    p2 = float(top_vals[1].item())
-    i1 = int(top_idx[0].item())
-    i2 = int(top_idx[1].item())
-    
-    raw_label = ID2LABEL[i1].lower()
-    
-    # threshold & margin
-    MIN_CONF = 0.55      # kalau kurang dari ini, anggap ga yakin
-    MIN_MARGIN = 0.15    # bedanya dengan kelas ke-2
-    
-    if p1 < MIN_CONF or (p1 - p2) < MIN_MARGIN:
-        # fallback: jangan maksa model sok tau
-        raw_label = "neutral"
-        confidence = p1
-    else:
-        confidence = p1
-    
-    category = MODEL_TO_CATEGORY.get(raw_label, "chill")
+    base_idx = int(np.argmax(logits))
+    base_label = ID2LABEL[base_idx].lower()
+    base_conf = float(logits[base_idx])
 
-    if category in ["mad_irritated", "sad", "worried_anxious"] and confidence < 0.60:
-        category = "chill"
-    
-    return raw_label, category, confidence
+    F = {}
+
+    F["happy"] = base_conf * (1 + 0.7*smile - 0.2*tension)
+    F["sad"] = base_conf * (1 + 0.4*tired)
+    F["angry"] = base_conf * (1 + 0.5*tension - 0.3*smile)
+    F["fear"] = base_conf * (1 + 0.2*tension)
+    F["neutral"] = base_conf * (1 - 0.2*smile)
+
+    final = max(F, key=F.get)
+    prob = F[final]
+
+    if final in ["angry", "fear", "sad"] and prob < 0.55:
+        final = "neutral"
+
+    cat = MODEL_TO_CATEGORY.get(final, "chill")
+    return final, cat, prob
 
 
-
-def realtime_scan(duration_sec=12, fps=15, buffer_size=25):
-    """
-    Versi stabil:
-    - Weighted smoothing
-    - Majority vote dari 3 snapshot waktu: early, mid, last
-    - Stabil banget untuk mood detection
-    """
-
+def realtime_scan(duration_sec=12, fps=15, buffer_size=32):
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        st.error("Cannot access camera. Please check permissions.")
+        st.error("Cannot access camera.")
         return None, None, None
 
-    frame_placeholder = st.empty()
-    progress_placeholder = st.empty()
-    stats_placeholder = st.empty()
+    frame_box = st.empty()
+    prog = st.empty()
+    stat = st.empty()
 
-    start_time = time.time()
-    interval = 1.0 / fps
+    start = time.time()
+    interval = 1/fps
 
-    emo_buffer = deque(maxlen=buffer_size)
-    conf_buffer = deque(maxlen=buffer_size)
+    buf = deque(maxlen=buffer_size)
+    buf_conf = deque(maxlen=buffer_size)
 
-    early_vote = None
-    mid_vote = None
-    late_vote = None
+    snap1 = snap2 = snap3 = None
+    t1, t2, t3 = duration_sec*0.25, duration_sec*0.50, duration_sec*0.80
 
-    # titik snapshot (detik)
-    early_t = duration_sec * 0.25
-    mid_t   = duration_sec * 0.50
-    late_t  = duration_sec * 0.85
-
-    last_raw = None
+    raw_last = None
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
+        ok, frame = cap.read()
+        if not ok:
             break
 
         frame = cv2.flip(frame, 1)
-        raw_label, category, conf = predict_emotion_from_frame(frame)
 
-        emo_buffer.append(category)
-        conf_buffer.append(conf)
-        last_raw = raw_label
+        raw, cat, conf = predict_emotion_from_frame(frame)
+        raw_last = raw
+        buf.append(cat)
+        buf_conf.append(conf)
 
-        elapsed = time.time() - start_time
+        el = time.time() - start
 
-        # ============================
-        # Weighted smoothing
-        # ============================
-        if emo_buffer:
-            weights = np.linspace(0.3, 1.0, len(emo_buffer))
-            score_map = {}
+        wts = np.linspace(0.4, 1.0, len(buf))
+        score = {}
 
-            for w, cat in zip(weights, emo_buffer):
-                score_map[cat] = score_map.get(cat, 0) + w
+        for w, c in zip(wts, buf):
+            score[c] = score.get(c, 0) + w
 
-            stable_cat = max(score_map, key=score_map.get)
+        stable = max(score, key=score.get)
+        stable_conf = np.mean([c for c, cc in zip(buf_conf, buf) if cc == stable])
 
-            # confidence untuk kategori stabil
-            stable_conf_vals = [
-                c for c, cat in zip(conf_buffer, emo_buffer) if cat == stable_cat
-            ]
-            stable_conf = sum(stable_conf_vals) / len(stable_conf_vals) if stable_conf_vals else conf
-        else:
-            stable_cat = category
-            stable_conf = conf
+        if snap1 is None and el >= t1: snap1 = stable
+        if snap2 is None and el >= t2: snap2 = stable
+        if snap3 is None and el >= t3: snap3 = stable
 
-        # ============================
-        # Snapshot voting
-        # ============================
-        if early_vote is None and elapsed >= early_t:
-            early_vote = stable_cat
-        if mid_vote is None and elapsed >= mid_t:
-            mid_vote = stable_cat
-        if late_vote is None and elapsed >= late_t:
-            late_vote = stable_cat
+        frame_box.image(frame, channels="BGR", use_container_width=True)
+        prog.progress(min(el/duration_sec,1.0))
+        stat.markdown(f"<div class='stats-container'><div class='stats-label'>Detected</div><div class='stats-value'>{CATEGORY_DISPLAY.get(stable, stable)}</div><div class='stats-subtext'>Confidence {stable_conf:.0%}</div></div>", unsafe_allow_html=True)
 
-        # ============================
-        # UI rendering
-        # ============================
-        display = frame.copy()
-
-        if face_detector is not None:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = face_detector.detectMultiScale(gray, 1.2, 5, minSize=(60,60))
-            for (x, y, w, h) in faces:
-                cv2.rectangle(display, (x, y), (x+w, y+h), (79, 70, 229), 2)
-
-        frame_placeholder.image(display, channels="BGR", use_container_width=True)
-
-        progress = min(elapsed / duration_sec, 1.0)
-        progress_placeholder.progress(
-            progress,
-            text=f"Scanning... {elapsed:.1f}s / {duration_sec}s"
-        )
-
-        stats_placeholder.markdown(
-            f"""
-            <div class='stats-container'>
-                <div class='stats-label'>Detected Mood</div>
-                <div class='stats-value'>{CATEGORY_DISPLAY.get(stable_cat, stable_cat)}</div>
-                <div class='stats-subtext'>Confidence: {stable_conf:.0%}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        if elapsed >= duration_sec:
+        if el >= duration_sec:
             break
 
         time.sleep(interval)
 
     cap.release()
 
-    # ============================
-    # Final: Majority voting dari 3 snapshot
-    # ============================
-    votes = [v for v in [early_vote, mid_vote, late_vote] if v is not None]
-
+    votes = [v for v in [snap1, snap2, snap3] if v]
     if not votes:
         return None, None, None
 
-    final_cat = Counter(votes).most_common(1)[0][0]
+    final = Counter(votes).most_common(1)[0][0]
+    final_conf = np.mean([c for c, cc in zip(buf_conf, buf) if cc == final])
 
-    # Confidence (dirata-rata yg sesuai kategori final)
-    conf_vals = [
-        c for c, cat in zip(conf_buffer, emo_buffer) if cat == final_cat
-    ]
-    final_conf = sum(conf_vals) / len(conf_vals) if conf_vals else 0.0
-
-    return last_raw, final_cat, final_conf
+    return raw_last, final, final_conf
 
 
 if 'step' not in st.session_state:
@@ -700,54 +683,34 @@ if st.session_state.step == 1:
         <div class='card-title'>Step 1: Mood Detection</div>
         <div class='card-description'>
             We'll use your camera to analyze your facial expression and detect your current mood.
-            The scan takes about 8 seconds and uses advanced AI technology.
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col2:
-        st.markdown("""
-        <div class='tips-container'>
-            <div class='tips-title'>Tips for best results:</div>
-            <ul class='tips-list'>
-                <li>Face the camera directly</li>
-                <li>Ensure good lighting</li>
-                <li>Stay 50-100cm away</li>
-                <li>Hold your expression</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col1:
-        img = st.camera_input("Start Mood Scan", key="scan_cam")
-        if img is not None:
-            pil_img = Image.open(img)
-            inputs = processor(images=pil_img, return_tensors="pt")
-            with torch.no_grad():
-                outputs = model(**inputs)
-            probs = outputs.logits.softmax(dim=1)[0]
-            idx = int(torch.argmax(probs).item())
-            raw_label = ID2LABEL[idx].lower()
-            confidence = float(probs[idx].item())
-            cat = MODEL_TO_CATEGORY.get(raw_label, "chill")
 
+    st.markdown("""
+    <div class='tips-container'>
+        <div class='tips-title'>Tips for best results:</div>
+        <ul class='tips-list'>
+            <li>Face the camera directly</li>
+            <li>Ensure good lighting</li>
+            <li>Stay 50-100cm away</li>
+            <li>Hold your expression</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("Start Mood Scan"):
+        raw, cat, conf = realtime_scan()
+
+        if cat is None:
+            st.error("Scan failed. Please try again.")
+        else:
             st.session_state.detected_cat = cat
-            st.session_state.detected_conf = confidence
+            st.session_state.detected_conf = conf
             st.session_state.final_cat = cat
             st.session_state.step = 2
-                
-            st.markdown(f"""
-            <div class='success-message'>
-                <h3>✓ Scan Complete!</h3>
-                <p>Detected mood: <strong>{CATEGORY_DISPLAY.get(cat, cat)}</strong> ({confidence:.0%} confidence)</p>
-            </div>
-            """, unsafe_allow_html=True)
-                
-            st.balloons()
-            time.sleep(1)
             st.rerun()
+
 
 
 elif st.session_state.step == 2:
