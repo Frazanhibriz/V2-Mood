@@ -712,10 +712,15 @@ elif st.session_state.step == 3:
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("**Flavor preference:**")
+        st.markdown("""
+        <div style='font-size:0.95rem; font-weight:600; color:#111827; margin-bottom:0.35rem;'>
+            Saat ini kamu pengen rasa yang…
+        </div>
+        """, unsafe_allow_html=True)
+
         flavor = st.radio(
             "flavor",
             ["Sweet", "Fresh", "Creamy", "Strong"],
@@ -725,7 +730,12 @@ elif st.session_state.step == 3:
         st.session_state.flavor_pref = flavor.lower()
     
     with col2:
-        st.markdown("**Energy level:**")
+        st.markdown("""
+        <div style='font-size:0.95rem; font-weight:600; color:#111827; margin-bottom:0.35rem;'>
+            Energi kamu hari ini gimana?
+        </div>
+        """, unsafe_allow_html=True)
+
         energy = st.radio(
             "energy",
             ["Tired", "Normal", "Energetic"],
@@ -737,7 +747,7 @@ elif st.session_state.step == 3:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
         if st.button("← Back", key="back_3"):
             st.session_state.step = 2
@@ -746,6 +756,7 @@ elif st.session_state.step == 3:
         if st.button("Get Recommendation →", key="next_3"):
             st.session_state.step = 4
             st.rerun()
+
 
 
 elif st.session_state.step == 4:
