@@ -691,7 +691,7 @@ elif st.session_state.step == 2:
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns([1)
+    col1, col2 = st.columns(1)
     with col1:
         if st.button("← Back", key="back_2"):
             st.session_state.step = 1
